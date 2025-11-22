@@ -1,33 +1,41 @@
 <!doctype html>
 <html lang="ar">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>تعريف عن اللعبة</title>
-  <style>
-    body{font-family:Tahoma,Arial;background:#f7fbff;color:#033;margin:0;padding:20px}
-    .card{max-width:820px;margin:40px auto;background:#fff;padding:20px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-    h1{margin-top:0}
-    a.btn{display:inline-block;margin-top:12px;padding:8px 14px;background:#1e7f5b;color:#fff;border-radius:6px;text-decoration:none}
-  </style>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>معلومات عن الموقع</title>
+	<style>
+		body{font-family:Tahoma,Arial;background:#f6fbff;color:#033;margin:0;padding:20px}
+		.card{max-width:820px;margin:40px auto;background:#fff;padding:20px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+		h1{margin-top:0}
+		a.btn{display:inline-block;margin-top:12px;padding:8px 14px;background:#1e7f5b;color:#fff;border-radius:6px;text-decoration:none}
+		.meta{margin-top:18px;color:#666;font-size:14px}
+	</style>
 </head>
 <body>
-  <div class="card">
-    <h1>معلومات عن لعبة الطائر</h1>
-    <h3>كيف تلعب</h3>
-    <p>اضغط مفتاح <strong>المسافة</strong> أو انقر/المس على الشاشة لجعل الطائر يطير قليلاً. كل ضغطة تعطي دفعة صعودية قصيرة. تجنب الاصطدام بالأنابيب أو بالأرض.</p>
-    <h3>النقاط والمكافآت</h3>
-    <p>تكسب نقطة واحدة عندما تتخطى أنبوباً بنجاح. تحصل على عمليتين كنقد داخل اللعبة كلما وصلت إلى مضاعف 10 نقاط (10، 20، 30...). تُخزَّن العملات محلياً في المتصفح.</p>
-    <h3>المتجر</h3>
-    <p>يمكنك فتح المتجر لشراء أشكال جديدة للطائر أو تغيير عالم اللعبة. سعر كل عنصر يبدأ عند 10 عملات ويزداد بعد كل شراء — الهدف هو تشجيع التقدم وجمع العملات.</p>
-    <h3>نصائح</h3>
-    <ul>
-      <li>حاول استخدام دفعات قصيرة ومتكررة للتحكم في الارتفاع.</li>
-      <li>انتبه لتوقيت المرور بين الأنابيب — السرعة تزداد تدريجياً.</li>
-      <li>اجمع العملات لفتح أشكال مرحة وعوالم مختلفة.</li>
-    </ul>
-    <a class="btn" href="index.html">العودة للعبة</a>
-  </div>
+	<div class="card">
+		<h1>عن الموقع</h1>
+		<p>هذا الموقع يحتوي على لعبة ترفيهية بسيطة تُعرض مباشرة في المتصفح. الهدف هو تقديم تجربة لعب خفيفة وسريعة يمكن تشغيلها على الحاسوب أو الهاتف دون تثبيت إضافي.</p>
+
+		<h3>المطور</h3>
+		<p>تم تصميم وتطوير هذا الموقع بواسطة: <strong>عبدالله العفيفي</strong>.</p>
+
+		<h3>النقاط والمكافآت</h3>
+		<p>تكسب نقطة واحدة عندما تتخطى أنبوباً بنجاح. تحصل على <strong>عملة واحدة</strong> داخل اللعبة كلما وصلت إلى مضاعف 2 نقاط (أي كل عقبتين: 2، 4، 6...). تُخزَّن العملات محلياً في المتصفح.</p>
+
+		<h3>حقوق النشر</h3>
+		<p class="meta">© <span id="year"></span> عبدالله العفيفي. جميع الحقوق محفوظة. لا يجوز إعادة توزيع اللعبة أو تعديلها ونشرها تجارياً دون إذن صريح من صاحب الحقوق.</p>
+
+		<h3>كيفية الاستخدام</h3>
+		<p>افتح للبدء باللعبة. يمكنك استخدام المتجر داخل اللعبة لشراء أشكال الطائر وتغيير العوالم. يتم حفظ التقدّم والاشترايات محليًا في المتصفح.</p>
+
+		<a class="btn" href="index.html">العودة إلى اللعبة</a>
+	</div>
+
+	<script>
+		// ضع السنة الحالية تلقائياً
+		document.getElementById('year').textContent = new Date().getFullYear();
+	</script>
 </body>
 </html>
 
