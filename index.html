@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="ar">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>لعبة الطائر</title>
+	<style>
+		:root{--bg:#70c5ce;--ground:#ded895;--pipe:#2ea44f;--bird:#ffdd57}
+		html,body{height:100%;margin:0;font-family:Tahoma,Arial}
+		.wrap{display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(#9be7f0,var(--bg));}
+		canvas{background:transparent;display:block;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+		.ui{position:fixed;left:16px;top:16px;color:#033;backdrop-filter:blur(4px)}
+		.overlay{position:absolute;left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#012;pointer-events:none}
+		.message{background:rgba(255,255,255,.92);padding:18px 22px;border-radius:10px;text-align:center;pointer-events:auto}
+		.btn{margin-top:10px;padding:8px 14px;border-radius:6px;background:#1e7f5b;color:#fff;border:none;cursor:pointer}
+		.scoreBox{position:fixed;right:16px;top:16px;background:rgba(255,255,255,.85);padding:8px 12px;border-radius:8px}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<canvas id="game" width="480" height="640" aria-label="لعبة الطائر"></canvas>
+		<div class="overlay" id="overlay">
+			<div class="message" id="startMsg">
+				<h2>مرحباً بلعبة الطائر</h2>
+				<p style="text-align:right">طريقة اللعب: اضغط مفتاح <strong>المسافة</strong> أو اضغط/المس على الشاشة لجعل الطائر يطير قليلاً. تجنب الاصطدام بالأنابيب أو الأرض.</p>
+				<p style="text-align:right">المتجر: تحصل على <strong>عملتين</strong> كلما تخطيت كل 10 عقبات. افتح المتجر لشراء أشكال جديدة للطائر أو عوالم. سعر كل عنصر يبدأ بـ <strong>10 عملات</strong> ويزداد بعد كل عملية شراء.</p>
+				<p style="text-align:right">النقاط تُحسب عندما تتخطى الأنبوب بنجاح. حاول تحقيق أعلى نتيجة!</p>
+				<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">
+					<button class="btn" id="startBtn">ابدأ اللعب</button>
+					<a class="btn" href="تعريف عن العبه.html" target="_blank" rel="noopener">تعرف أكثر</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="scoreBox" id="scoreBox">النقاط: <span id="score">0</span><br>الأفضل: <span id="best">0</span><br>عملات: <span id="coins">0</span><br>
+		<button class="btn" id="shopBtn">المتجر</button>
+		<button class="btn" id="rateBtn" style="margin-top:8px;background:#3b82f6">قيّم اللعبة</button>
+		<div style="margin-top:8px;color:#222">تقييم: <span id="ratingAvg">-</span> ★ (<span id="ratingCount">0</span>)</div>
+	</div>
+
+	<!-- نافذة المتجر -->
+	<div class="overlay" id="shopOverlay" style="display:none;pointer-events:auto">
+		<div class="message" id="shopMsg">
+			<h2>متجر اللعبة</h2>
+			<div id="shopItems" style="max-height:300px;overflow:auto;text-align:right"></div>
+			<div style="margin-top:12px"><button class="btn" id="closeShop">إغلاق</button></div>
+		</div>
+	</div>
+
+	<!-- نافذة التقييم -->
+	<div class="overlay" id="ratingOverlay" style="display:none;pointer-events:auto">
+		<div class="message" id="ratingMsg" style="max-width:420px">
+			<h2>قيّم اللعبة</h2>
+			<p style="text-align:right">اختَر عدد النجوم الذي تريده ثم اضغط إرسال. شكراً لملاحظاتك!</p>
+			<div id="stars" style="font-size:28px;text-align:center;direction:ltr;margin:8px 0;user-select:none">★★★★★</div>
+			<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+				<button class="btn" id="submitRating">إرسال</button>
+				<button class="btn" id="closeRating" style="background:#777">إغلاق</button>
+			</div>
+			<div id="ratingThanks" style="margin-top:10px;text-align:center;color:green;display:none">شكراً لتقييمك!</div>
+		</div>
+	</div>
+
+	<script>
+	(function(){
+		const canvas = document.getElementById('game');
+		const ctx = canvas.getContext('2d');
+		const W = canvas.width, H = canvas.height;
+
+		// عناصر الواجهة
+		const overlay = document.getElementById('overlay');
+		const startMsg = document.getElementById('startMsg');
+		const startBtn = document.getElementById('startBtn');
+		const scoreEl = document.getElementById('score');
+		const bestEl = document.getElementById('best');
+
+		// لعبة
+		let bird, pipes, frame, running, score, bestScore, clouds;
+		// متجر و عملات
+		let coins = 0;
+		const SHOP_BASE_PRICE = 10;
+		const PRICE_INCREMENT = 5; // تزداد القيمة بعد كل عملية شراء
+		let shopPurchaseCount = parseInt(localStorage.getItem('flappy_shop_count')||'0',10);
+		let purchases = JSON.parse(localStorage.getItem('flappy_purchases')||'{}');
+		let currentSkin = localStorage.getItem('flappy_skin') || 'skin_yellow';
+		let currentWorld = localStorage.getItem('flappy_world') || 'world_default';
+
+		const skins = [
+			{id:'skin_yellow', name:'أصفر ساطع', bodyStart:'#ffd966', bodyEnd:'#ffb84d', wing:'#f2c94c', beak:'#ff9b2e', accessory:'hat', accColor:'#6b3f1f'},
+			{id:'skin_blue', name:'أزرق هادي', bodyStart:'#9bd3ff', bodyEnd:'#5fb4ff', wing:'#7fc9ff', beak:'#ffb86b', accessory:'crown', accColor:'#ffd700', gem:'#e74c3c'},
+			{id:'skin_pink', name:'وردي محبّب', bodyStart:'#ffd1e6', bodyEnd:'#ff9ac1', wing:'#ffb3d9', beak:'#ffc08a', accessory:'flower', accColor:'#ff6fa3', center:'#ffd166'}
+		];
+
+		const worlds = [
+			{id:'world_default', name:'الافتراضي', bg:'#70c5ce', pipe:'#2ea44f', ground:'#ded895'},
+			{id:'world_sunset', name:'غروب', bg:'#ffb199', pipe:'#cf5a2b', ground:'#c89b5b'},
+			{id:'world_night', name:'ليلي', bg:'#162447', pipe:'#3b6b8f', ground:'#2d3440'}
+		];
+
+		function reset(){
+			// أظهر نافذة الشرح عند بداية كل تحميل للصفحة
+			overlay.style.display = 'flex';
+
+			bird = {x:80, y: H/2, r:14, vy:0};
+			pipes = [];
+			clouds = [];
+			// انشاء بعض السحب الابتدائية
+			for(let i=0;i<4;i++){
+				clouds.push({x: Math.random()*W, y: 40 + Math.random()*140, size: 0.6+Math.random()*1.2, speed: 0.2 + Math.random()*0.5});
+			}
+			frame = 0;
+			running = false;
+			score = 0;
+			bestScore = parseInt(localStorage.getItem('flappy_best')||'0',10);
+			scoreEl.textContent = score;
+			// عملات وحالة المتجر
+			coins = parseInt(localStorage.getItem('flappy_coins')||'0',10);
+			document.getElementById('coins').textContent = coins;
+			applySkin(currentSkin);
+			applyWorld(currentWorld);
+			bestEl.textContent = bestScore;
+		}
+
+		const GRAV = 0.55; const JUMP = -9.5; const PIPE_W = 60; const GAP = 160;
+		const BASE_PIPE_SPEED = 2.4; // السرعة الابتدائية لحركة العقبات
+		const SPEED_STEP_PER_10 = 0.6; // مقدار الزيادة كل 10 نقاط
+		const MAX_SPEED_INCREASE = 3.0; // حد أقصى للزيادة
+
+		function spawnPipe(){
+			const margin = 60;
+			const gap = GAP - Math.max(0, Math.floor(score/10)*8);
+			const topH = margin + Math.random()*(H - margin*2 - gap);
+			pipes.push({x:W, top:topH, bottom: topH + gap, passed:false});
+		}
+
+		function update(){
+			if(!running) return;
+			frame++;
+			// physics
+			bird.vy += GRAV; bird.y += bird.vy;
+
+			// تحريك السحب ببطء
+			for(let c of clouds){
+				c.x -= c.speed;
+				if(c.x < -120 * c.size) c.x = W + Math.random()*160;
+			}
+
+			// spawn
+			if(frame % 100 === 0) spawnPipe();
+
+			// move pipes
+			// احسب السرعة الحالية بناءً على عدد النقاط، تزداد كل 10 نقاط
+			const speedIncrease = Math.min(MAX_SPEED_INCREASE, Math.floor(score/10) * SPEED_STEP_PER_10);
+			const currentPipeSpeed = BASE_PIPE_SPEED + speedIncrease;
+			for(let p of pipes){
+				p.x -= currentPipeSpeed;
+			}
+			// remove offscreen
+			if(pipes.length && pipes[0].x < -PIPE_W) pipes.shift();
+
+			// scoring
+			for(let p of pipes){
+				if(!p.passed && p.x + PIPE_W < bird.x){ p.passed = true; score++; scoreEl.textContent = score; if(score>bestScore){ bestScore = score; bestEl.textContent = bestScore; localStorage.setItem('flappy_best', bestScore); } }
+			}
+
+			// منح عملتين كلما تخطى اللاعب مضاعف 10 نقاط
+			if(score>0 && score % 10 === 0){
+				const key = 'coin_awarded_'+score;
+				if(!localStorage.getItem(key)){
+					coins += 2;
+					document.getElementById('coins').textContent = coins;
+					localStorage.setItem('flappy_coins', coins);
+					localStorage.setItem(key, '1');
+				}
+			}
+
+			// collisions
+			if(bird.y + bird.r > H - 30 || bird.y - bird.r < 0) endGame();
+			for(let p of pipes){
+				if(rectCircleCollide(p.x, 0, PIPE_W, p.top, bird.x, bird.y, bird.r) || rectCircleCollide(p.x, p.bottom, PIPE_W, H - p.bottom - 30, bird.x, bird.y, bird.r)){
+					endGame(); break;
+				}
+			}
+		}
+
+		function rectCircleCollide(rx, ry, rw, rh, cx, cy, cr){
+			const nearestX = Math.max(rx, Math.min(cx, rx+rw));
+			const nearestY = Math.max(ry, Math.min(cy, ry+rh));
+			const dx = cx - nearestX, dy = cy - nearestY;
+			return (dx*dx + dy*dy) < cr*cr;
+		}
+
+		function draw(){
+			// background gradient
+			const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg') || '#70c5ce';
+			ctx.fillStyle = bgColor;
+			ctx.fillRect(0,0,W,H);
+
+			// sun
+			const sunX = W - 80, sunY = 80;
+			let g = ctx.createRadialGradient(sunX,sunY,10,sunX,sunY,80);
+			g.addColorStop(0, 'rgba(255,245,160,0.95)');
+			g.addColorStop(1, 'rgba(255,245,160,0.08)');
+			ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sunX,sunY,70,0,Math.PI*2); ctx.fill();
+
+			// سحب (خلف الأنابيب)
+			for(let c of clouds) drawCloud(c.x, c.y, c.size);
+
+			// pipes
+			for(let p of pipes){
+				ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--pipe');
+				// top
+				ctx.fillRect(p.x, 0, PIPE_W, p.top);
+				// bottom
+				ctx.fillRect(p.x, p.bottom, PIPE_W, H - p.bottom - 30);
+				// pipe caps
+				ctx.fillStyle = '#1b6b36';
+				ctx.fillRect(p.x-4, p.top-8, PIPE_W+8, 8);
+				ctx.fillRect(p.x-4, p.bottom, PIPE_W+8, 8);
+			}
+
+			// ground with texture
+			const grd = ctx.createLinearGradient(0,H-30,0,H);
+			grd.addColorStop(0, getComputedStyle(document.documentElement).getPropertyValue('--ground'));
+			grd.addColorStop(1, '#cdbf7a');
+			ctx.fillStyle = grd;
+			ctx.fillRect(0, H-30, W, 30);
+			for(let i=0;i<W;i+=14){
+				ctx.fillStyle = 'rgba(0,0,0,0.03)';
+				ctx.fillRect(i, H-26 + (i%28===0?1:0), 8, 2);
+			}
+
+			// bird (مع دوران وجناح متحرك)
+			drawBird();
+		}
+
+		function drawCloud(x,y,scale){
+			ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.9)';
+			ctx.beginPath(); ctx.ellipse(x, y, 40*scale, 24*scale, 0, 0, Math.PI*2); ctx.fill();
+			ctx.beginPath(); ctx.ellipse(x+30*scale, y+6*scale, 34*scale, 20*scale, 0, 0, Math.PI*2); ctx.fill();
+			ctx.beginPath(); ctx.ellipse(x-28*scale, y+6*scale, 30*scale, 18*scale, 0, 0, Math.PI*2); ctx.fill();
+			ctx.restore();
+		}
+
+		function drawBird(){
+			// زاوية بسيطة حسب السرعة الرأسية
+			const angle = Math.max(-0.9, Math.min(1.2, bird.vy * 0.06));
+			ctx.save();
+			ctx.translate(bird.x, bird.y);
+			ctx.rotate(angle);
+			// body مع تدرج حسب الجلد الحالي
+			const skin = skins.find(s=>s.id===currentSkin) || skins[0];
+			const bodyGrad = ctx.createLinearGradient(-bird.r, -bird.r, bird.r, bird.r);
+			bodyGrad.addColorStop(0, skin.bodyStart);
+			bodyGrad.addColorStop(1, skin.bodyEnd);
+			ctx.fillStyle = bodyGrad;
+			ctx.beginPath(); ctx.ellipse(0,0,bird.r*1.3,bird.r,0,0,Math.PI*2); ctx.fill();
+			// جناح (animated)
+			const wingFlap = Math.sin(frame * 0.28) * (1.2 - Math.min(1, Math.abs(bird.vy)*0.08));
+			ctx.save();
+			ctx.translate(-4, 0);
+			ctx.rotate(-0.6 + wingFlap);
+			ctx.fillStyle = skin.wing || '#f2c94c';
+			ctx.beginPath(); ctx.ellipse(0, 6, bird.r*0.9, bird.r*0.5, 0, 0, Math.PI*2); ctx.fill();
+			ctx.restore();
+			// beak
+			ctx.fillStyle = skin.beak || '#ff9b2e';
+			ctx.beginPath(); ctx.moveTo(bird.r+2, -4); ctx.lineTo(bird.r+14, 0); ctx.lineTo(bird.r+2, 6); ctx.closePath(); ctx.fill();
+			// eye
+			ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(6, -4, 3, 0, Math.PI*2); ctx.fill();
+
+			// accessory (قبعة / تاج / وردة)
+			const acc = skin.accessory;
+			if(acc === 'hat'){
+				// brim
+				ctx.fillStyle = skin.accColor || '#6b3f1f';
+				ctx.beginPath(); ctx.ellipse(2, -bird.r-2, bird.r*1.0, bird.r*0.32, 0, 0, Math.PI*2); ctx.fill();
+				// top
+				ctx.fillStyle = '#6b3f1f'; ctx.beginPath(); ctx.rect(-6, -bird.r-12, 16, 9); ctx.fill();
+				// band
+				ctx.fillStyle = '#ffd966'; ctx.fillRect(-6, -bird.r-6, 16, 3);
+			}
+			else if(acc === 'crown'){
+				// base
+				ctx.fillStyle = skin.accColor || '#ffd700'; ctx.fillRect(-8, -bird.r-6, 20, 6);
+				// spikes
+				ctx.beginPath(); ctx.moveTo(-6, -bird.r-6); ctx.lineTo(-2, -bird.r-18); ctx.lineTo(0, -bird.r-6); ctx.moveTo(0, -bird.r-6); ctx.lineTo(4, -bird.r-18); ctx.lineTo(8, -bird.r-6); ctx.fill();
+				// gems
+				ctx.fillStyle = skin.gem || '#e74c3c'; ctx.beginPath(); ctx.arc(-2, -bird.r-14, 2.4,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(4, -bird.r-14, 2.4,0,Math.PI*2); ctx.fill();
+			}
+			else if(acc === 'flower'){
+				// petals
+				const px = bird.r + 6, py = -6;
+				ctx.fillStyle = skin.accColor || '#ff6fa3';
+				for(let i=0;i<6;i++){
+					const a = i * (Math.PI*2/6);
+					ctx.beginPath(); ctx.ellipse(px + Math.cos(a)*6, py + Math.sin(a)*6, 5, 8, a, 0, Math.PI*2); ctx.fill();
+				}
+				// center
+				ctx.fillStyle = skin.center || '#ffd166'; ctx.beginPath(); ctx.arc(px, py, 4, 0, Math.PI*2); ctx.fill();
+			}
+
+			ctx.restore();
+		}
+
+		function loop(){
+			update(); draw();
+			requestAnimationFrame(loop);
+		}
+
+		// وظائف المتجر
+		const shopBtn = document.getElementById('shopBtn');
+		const shopOverlay = document.getElementById('shopOverlay');
+		const shopItems = document.getElementById('shopItems');
+		const closeShop = document.getElementById('closeShop');
+
+		function getCurrentPrice(){
+			return SHOP_BASE_PRICE + shopPurchaseCount * PRICE_INCREMENT;
+		}
+
+		function drawSkinPreviewToCanvas(cnv, s){
+			const cx = cnv.getContext('2d');
+			const w = cnv.width, h = cnv.height;
+			cx.clearRect(0,0,w,h);
+			// background
+			cx.fillStyle = 'rgba(255,255,255,0)'; cx.fillRect(0,0,w,h);
+			// draw small bird center-left
+			const bx = 34, by = h/2, br = 12;
+			const grad = cx.createLinearGradient(bx-br, by-br, bx+br, by+br);
+			grad.addColorStop(0, s.bodyStart); grad.addColorStop(1, s.bodyEnd);
+			cx.fillStyle = grad; cx.beginPath(); cx.ellipse(bx,by,br*1.1,br,0,0,Math.PI*2); cx.fill();
+			// wing
+			cx.fillStyle = s.wing; cx.beginPath(); cx.ellipse(bx-6, by+4, br*0.9, br*0.5, -0.6,0,Math.PI*2); cx.fill();
+			// beak
+			cx.fillStyle = s.beak; cx.beginPath(); cx.moveTo(bx+br-1, by-3); cx.lineTo(bx+br+8, by); cx.lineTo(bx+br-1, by+4); cx.closePath(); cx.fill();
+			// eye
+			cx.fillStyle = '#222'; cx.beginPath(); cx.arc(bx+4, by-4, 2.2,0,Math.PI*2); cx.fill();
+		}
+
+		function drawWorldPreviewToCanvas(cnv, wdef){
+			const cx = cnv.getContext('2d');
+			const w = cnv.width, h = cnv.height;
+			cx.clearRect(0,0,w,h);
+			// background
+			cx.fillStyle = wdef.bg; cx.fillRect(0,0,w,h);
+			// ground
+			cx.fillStyle = wdef.ground; cx.fillRect(0,h-18,w,18);
+			// a pipe
+			cx.fillStyle = wdef.pipe; cx.fillRect(w-70, 10, 40, h-80);
+			// pipe cap
+			cx.fillStyle = '#184f2a'; cx.fillRect(w-74, 6, 48, 8);
+		}
+
+		function renderShop(){
+			// إجمالي HTML لكن نستخدم عناصر معاينة رسمية
+			let html = '';
+			html += '<div style="text-align:right">';
+			html += '<h3>العوالم</h3>';
+			for(let w of worlds){
+				const owned = purchases[w.id];
+				html += '<div class="shop-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #eee;margin-bottom:6px">';
+				html += '<div style="text-align:right;flex:1">';
+				html += '<strong>'+w.name+'</strong><br><small style="color:#666">معاينة العالم</small>';
+				html += '</div>';
+				html += '<div style="width:140px;height:64px;margin-left:12px" id="preview-world-'+w.id+'"></div>';
+				if(currentWorld===w.id) html += '<div style="width:120px;text-align:left">مُطبّق</div>';
+				else if(owned) html += '<div style="width:120px;text-align:left"><button class="btn" data-action="apply" data-type="world" data-id="'+w.id+'">تطبيق</button></div>';
+				else html += '<div style="width:120px;text-align:left"><button class="btn" data-action="buy" data-type="world" data-id="'+w.id+'">شراء '+getCurrentPrice()+' عملة</button></div>';
+				html += '</div>';
+			}
+			html += '<h3>أشكال الطائر</h3>';
+			for(let s of skins){
+				const owned = purchases[s.id];
+				html += '<div class="shop-item" style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #eee;margin-bottom:6px">';
+				html += '<div style="text-align:right;flex:1">';
+				html += '<strong>'+s.name+'</strong><br><small style="color:#666">معاينة الشكل</small>';
+				html += '</div>';
+				html += '<div style="width:120px;height:64px;margin-left:12px" id="preview-skin-'+s.id+'"></div>';
+				if(currentSkin===s.id) html += '<div style="width:120px;text-align:left">مُطبّق</div>';
+				else if(owned) html += '<div style="width:120px;text-align:left"><button class="btn" data-action="apply" data-type="skin" data-id="'+s.id+'">تطبيق</button></div>';
+				else html += '<div style="width:120px;text-align:left"><button class="btn" data-action="buy" data-type="skin" data-id="'+s.id+'">شراء '+getCurrentPrice()+' عملة</button></div>';
+				html += '</div>';
+			}
+			html += '</div>';
+			shopItems.innerHTML = html;
+			// render previews
+			for(let w of worlds){
+				const holder = document.getElementById('preview-world-'+w.id);
+				if(holder){
+					const cnv = document.createElement('canvas'); cnv.width = 140; cnv.height = 64; holder.appendChild(cnv);
+					drawWorldPreviewToCanvas(cnv, w);
+				}
+			}
+			for(let s of skins){
+				const holder = document.getElementById('preview-skin-'+s.id);
+				if(holder){
+					const cnv = document.createElement('canvas'); cnv.width = 120; cnv.height = 64; holder.appendChild(cnv);
+					drawSkinPreviewToCanvas(cnv, s);
+				}
+			}
+			// أضف مستمع للأزرار
+			shopItems.querySelectorAll('button').forEach(btn=>{
+				btn.addEventListener('click', ()=>{
+					const action = btn.getAttribute('data-action');
+					const type = btn.getAttribute('data-type');
+					const id = btn.getAttribute('data-id');
+					if(action==='buy') buyItem(type,id);
+					if(action==='apply'){
+						if(type==='skin') applySkin(id);
+						if(type==='world') applyWorld(id);
+						renderShop();
+					}
+				});
+			});
+		}
+
+		function buyItem(type,id){
+			const price = getCurrentPrice();
+			if(coins < price){ alert('ليس لديك ما يكفي من العملات'); return; }
+			coins -= price; document.getElementById('coins').textContent = coins; localStorage.setItem('flappy_coins', coins);
+			purchases[id] = true; localStorage.setItem('flappy_purchases', JSON.stringify(purchases));
+			shopPurchaseCount++; localStorage.setItem('flappy_shop_count', shopPurchaseCount);
+			renderShop();
+		}
+
+		function applySkin(id){
+			currentSkin = id; localStorage.setItem('flappy_skin', id);
+		}
+
+		function applyWorld(id){
+			currentWorld = id; localStorage.setItem('flappy_world', id);
+			const w = worlds.find(x=>x.id===id) || worlds[0];
+			document.documentElement.style.setProperty('--bg', w.bg);
+			document.documentElement.style.setProperty('--pipe', w.pipe);
+			document.documentElement.style.setProperty('--ground', w.ground);
+		}
+
+		shopBtn.addEventListener('click', ()=>{ shopOverlay.style.display='flex'; renderShop(); });
+		closeShop.addEventListener('click', ()=>{ shopOverlay.style.display='none'; });
+
+		// ====== نظام التقييم ======
+		const rateBtn = document.getElementById('rateBtn');
+		const ratingOverlay = document.getElementById('ratingOverlay');
+		const starsDiv = document.getElementById('stars');
+		const submitRating = document.getElementById('submitRating');
+		const closeRating = document.getElementById('closeRating');
+		const ratingThanks = document.getElementById('ratingThanks');
+		let ratings = JSON.parse(localStorage.getItem('flappy_ratings')||'[]');
+		let userRating = parseInt(localStorage.getItem('flappy_user_rating')||'0',10) || 0;
+		let selectedRating = userRating || 0;
+
+		function renderRatingSummary(){
+			const avgEl = document.getElementById('ratingAvg');
+			const cntEl = document.getElementById('ratingCount');
+			if(ratings.length===0){ avgEl.textContent = '-'; cntEl.textContent = '0'; }
+			else{ const avg = (ratings.reduce((a,b)=>a+b,0)/ratings.length); avgEl.textContent = avg.toFixed(1); cntEl.textContent = ratings.length; }
+		}
+
+		function buildStars(){
+			starsDiv.innerHTML = '';
+			for(let i=1;i<=5;i++){
+				const sp = document.createElement('span');
+				sp.textContent = '★';
+				sp.style.cursor = 'pointer';
+				sp.style.color = (i <= selectedRating) ? '#ffcc00' : '#ddd';
+				sp.style.margin = '0 4px';
+				sp.dataset.value = i;
+				sp.addEventListener('mouseenter', ()=>{ highlightStars(i); });
+				sp.addEventListener('mouseleave', ()=>{ highlightStars(selectedRating); });
+				sp.addEventListener('click', ()=>{ selectedRating = i; localStorage.setItem('flappy_user_rating', selectedRating); highlightStars(selectedRating); });
+				starsDiv.appendChild(sp);
+			}
+		}
+
+		function highlightStars(n){
+			Array.from(starsDiv.children).forEach(s=>{ const v = parseInt(s.dataset.value,10); s.style.color = (v<=n)?'#ffcc00':'#ddd'; });
+		}
+
+		rateBtn.addEventListener('click', ()=>{ ratingOverlay.style.display='flex'; selectedRating = userRating || 0; buildStars(); });
+		closeRating.addEventListener('click', ()=>{ ratingOverlay.style.display='none'; ratingThanks.style.display='none'; });
+
+		submitRating.addEventListener('click', ()=>{
+			if(selectedRating <= 0){ alert('اختر عدد النجوم أولاً'); return; }
+			// إذا قيّم المستخدم سابقًا، استبدل تقييمه القديم بهذا التقييم بدلاً من الإضافة
+			if(userRating > 0){
+				const idx = ratings.indexOf(userRating);
+				if(idx >= 0){
+					ratings[idx] = selectedRating;
+				}else{
+					ratings.push(selectedRating);
+				}
+			}else{
+				ratings.push(selectedRating);
+			}
+			localStorage.setItem('flappy_ratings', JSON.stringify(ratings));
+			userRating = selectedRating; localStorage.setItem('flappy_user_rating', userRating);
+			renderRatingSummary();
+			ratingThanks.style.display = 'block';
+			// تعطيل زر التقييم لمنع التقييم لاحقاً
+			rateBtn.textContent = 'تم التقييم'; rateBtn.disabled = true; rateBtn.style.opacity = 0.6; rateBtn.style.cursor = 'default';
+			setTimeout(()=>{ ratingOverlay.style.display='none'; ratingThanks.style.display='none'; }, 900);
+		});
+
+		// initialize rating summary on load
+		renderRatingSummary();
+		// إذا قيّم المستخدم مسبقاً، عطل زر التقييم
+		if(userRating > 0){ rateBtn.textContent = 'تم التقييم'; rateBtn.disabled = true; rateBtn.style.opacity = 0.6; rateBtn.style.cursor = 'default'; }
+
+		function flap(){
+			bird.vy = JUMP;
+			running = true;
+			if(overlay.style.display !== 'none'){ overlay.style.display = 'none'; }
+		}
+
+		function endGame(){
+			// عند الموت: إيقاف اللعبة وعرض نافذة معلومات عن الموقع مع رابط وزر إعادة تشغيل
+			running = false;
+			overlay.style.display = 'flex';
+			startMsg.innerHTML = '<h2>انتهت اللعبة</h2>' +
+				'<p>أحرزت: '+score+' نقطة.</p>' +
+				'<p>لمعرفة المزيد عن هذا الموقع، اضغط الزر أدناه:</p>' +
+				'<div style="display:flex;gap:8px;justify-content:center;margin-top:8px">' +
+				'<a class="btn" href="about.html" target="_blank" rel="noopener">معلومات عن الموقع</a>' +
+				'<button class="btn" id="restartBtn">أعد المحاولة</button>' +
+				'</div>';
+
+			// حدث زر إعادة المحاولة
+			setTimeout(()=>{
+				const rb = document.getElementById('restartBtn');
+				if(rb) rb.addEventListener('click', ()=>{
+					reset(); overlay.style.display='none'; running=true;
+				});
+			}, 50);
+		}
+
+		// تحكمات
+		window.addEventListener('keydown', e=>{
+			if(e.code === 'Space' || e.keyCode === 32){ e.preventDefault(); if(!running && frame===0){ running=true; overlay.style.display='none' } flap(); }
+		});
+		canvas.addEventListener('mousedown', ()=>{ flap(); });
+		canvas.addEventListener('touchstart', (e)=>{ e.preventDefault(); flap(); });
+
+		startBtn.addEventListener('click', ()=>{ overlay.style.display='none'; running=true; });
+
+		// init
+		reset(); loop();
+	})();
+	</script>
+</body>
+</html>
