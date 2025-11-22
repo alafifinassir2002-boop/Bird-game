@@ -23,7 +23,7 @@
 			<div class="message" id="startMsg">
 				<h2>مرحباً بلعبة الطائر</h2>
 				<p style="text-align:right">طريقة اللعب: اضغط مفتاح <strong>المسافة</strong> أو اضغط/المس على الشاشة لجعل الطائر يطير قليلاً. تجنب الاصطدام بالأنابيب أو الأرض.</p>
-				<p style="text-align:right">المتجر: تحصل على <strong>عملتين</strong> كلما تخطيت كل 10 عقبات. افتح المتجر لشراء أشكال جديدة للطائر أو عوالم. سعر كل عنصر يبدأ بـ <strong>10 عملات</strong> ويزداد بعد كل عملية شراء.</p>
+				<p style="text-align:right">المتجر: تحصل على <strong>عملة واحدة</strong> كلما تخطيت <strong>عقبتين</strong>. افتح المتجر لشراء أشكال جديدة للطائر أو عوالم. سعر كل عنصر يبدأ بـ <strong>10 عملات</strong> ويزداد بعد كل عملية شراء.</p>
 				<p style="text-align:right">النقاط تُحسب عندما تتخطى الأنبوب بنجاح. حاول تحقيق أعلى نتيجة!</p>
 				<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">
 					<button class="btn" id="startBtn">ابدأ اللعب</button>
@@ -163,11 +163,11 @@
 				if(!p.passed && p.x + PIPE_W < bird.x){ p.passed = true; score++; scoreEl.textContent = score; if(score>bestScore){ bestScore = score; bestEl.textContent = bestScore; localStorage.setItem('flappy_best', bestScore); } }
 			}
 
-			// منح عملتين كلما تخطى اللاعب مضاعف 10 نقاط
-			if(score>0 && score % 10 === 0){
+			// منح عملة واحدة كلما تخطى اللاعب عقبتين (كلما كان العدد زوجياً)
+			if(score>0 && score % 2 === 0){
 				const key = 'coin_awarded_'+score;
 				if(!localStorage.getItem(key)){
-					coins += 2;
+					coins += 1;
 					document.getElementById('coins').textContent = coins;
 					localStorage.setItem('flappy_coins', coins);
 					localStorage.setItem(key, '1');
